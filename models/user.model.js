@@ -1,34 +1,50 @@
-const captainController = require('../controllers/captain.controller');
-const express = require('express');
-const router = express.Router();
-const { body } = require("express-validator")
-const authMiddleware = require('../middlewares/auth.middleware');
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 
-router.post('/register', [
-    body('email').isEmail().withMessage('Invalid Email'),
-    body('fullname.firstname').isLength({ min: 3 }).withMessage('First name must be at least 3 characters long'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
-    body('vehicle.color').isLength({ min: 3 }).withMessage('Color must be at least 3 characters long'),
-    body('vehicle.plate').isLength({ min: 3 }).withMessage('Plate must be at least 3 characters long'),
-    body('vehicle.capacity').isInt({ min: 1 }).withMessage('Capacity must be at least 1'),
-    body('vehicle.vehicleType').isIn([ 'car', 'motorcycle', 'auto' ]).withMessage('Invalid vehicle type')
-],
-    captainController.registerCaptain
-)
+const userSchema = new mongoose.Schema({
+    fullname: {
+        firstname: {
+            type: String,
+            required: true,
+            minlength: [ 3, 'First name must be at least 3 characters long' ],
+        },
+        lastname: {
+            type: String,
+            minlength: [ 3, 'Last name must be at least 3 characters long' ],
+        }
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        minlength: [ 5, 'Email must be at least 5 characters long' ],
+    },
+    password: {
+        type: String,
+        required: true,
+        select: false,
+    },
+    socketId: {
+        type: String,
+    },
+})
+
+userSchema.methods.generateAuthToken = function () {
+    const token = jwt.sign({ _id: this._id }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    return token;
+}
+
+userSchema.methods.comparePassword = async function (password) {
+    return await bcrypt.compare(password, this.password);
+}
+
+userSchema.statics.hashPassword = async function (password) {
+    return await bcrypt.hash(password, 10);
+}
+
+const userModel = mongoose.model('user', userSchema);
 
 
-router.post('/login', [
-    body('email').isEmail().withMessage('Invalid Email'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
-],
-    captainController.loginCaptain
-)
-
-
-router.get('/profile', authMiddleware.authCaptain, captainController.getCaptainProfile)
-
-router.get('/logout', authMiddleware.authCaptain, captainController.logoutCaptain)
-
-
-module.exports = router;
+module.exports = userModel;
